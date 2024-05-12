@@ -4,6 +4,9 @@
 #include <WiFiServer.h>
 #include <Ticker.h>
 
+// Commands
+#define GET_TEMP "GET_TEMPERATURE"
+
 // LED configuration
 const auto RED_LED = D6;
 const uint16_t BLINK_INTERVAL = 500u;
@@ -18,8 +21,14 @@ const char *broadcastMessage = "I am alive!";
 // WIFI variables
 IPAddress myCurrentIPAddr;
 WiFiUDP udp;
-Ticker broadCastTicker;
 WiFiServer server(serverPort);
+WiFiClient client;
+
+// Timers
+Ticker broadCastTicker;
+
+// Other variables
+char incomingPacket[255];
 
 void connectToWiFi() {
 	WiFi.begin(ssid, password);
@@ -43,7 +52,14 @@ void setup() {
 	Serial.begin(115200);
 	connectToWiFi();
 	broadCastTicker.attach(broadcastInterval, broadCastIP);
-	server.begin(serverPort, 1u);
+	server.begin(serverPort, 2u);
+}
+
+void parseIncomingPacket(const char *incomingPacket) {
+	if (strncmp(incomingPacket, GET_TEMP, strlen(GET_TEMP)) == 0) {
+		Serial.println("GET_TEMP command received");
+		client.print("25");
+	}
 }
 
 void loop() {
@@ -52,10 +68,30 @@ void loop() {
 		connectToWiFi();
 	}
 
-	WiFiClient client = server.accept();
+	if (!client) {
+		client = server.accept();
+		if (client) {
+			Serial.println("Client connected");
+		}
+	}
+
 	if (client) {
-		Serial.println("New client connected");
-		client.println("Hello from ESP8266");
-		client.stop();
+		WiFiClient newClient = server.accept();
+		if (newClient) {
+			newClient.println("Only one client allowed at a time");
+			newClient.stop();
+		}
+	}
+
+	if (client) {
+		if (!client.connected()) {
+			Serial.println("Client disconnected");
+			client.stop();
+		}
+		int recvLen = client.read((uint8_t *)incomingPacket, sizeof(incomingPacket));
+		if (recvLen > 0) {
+			Serial.println(incomingPacket);
+			parseIncomingPacket(incomingPacket);
+		}
 	}
 }
