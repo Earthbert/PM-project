@@ -3,7 +3,7 @@
 #include <WiFiUdp.h>
 #include <WiFiServer.h>
 #include <Ticker.h>
-#include <DHT.h>
+#include <SimpleDHT.h>
 
 // Commands
 #define GET_TEMP 'G'
@@ -11,7 +11,7 @@
 #define STOP_ADVERTISE 'S'
 
 // LED configuration
-const auto TEMPERATURE_LED = D6;
+const auto TEMPERATURE_LED = D3;
 const auto HUMIDITY_LED = D2;
 // WIFI configuration
 const uint16_t serverPort = 6969u;
@@ -29,6 +29,7 @@ bool advertise = true;
 // Timers
 Ticker broadCastTicker;
 Ticker sensorTicker;
+Ticker wifiTicker;
 
 // Other variables
 char incomingPacket[255];
@@ -41,24 +42,25 @@ enum temperatureType {
 };
 
 struct interval {
-	float lower;
-	float upper;
+	byte lower;
+	byte upper;
 };
 
 temperatureType currentTemperatureType = CELSIUS;
 interval temperatureInterval = { 20, 40 };
-interval humidityInterval = { 0, 100 };
+byte temperature_threshold = 30;
+byte humidity_threshold = 50;
 
 // Temperature sensor
-DHT dht11(D7, DHT11);
-float temperature = 30;
-float humidity = 100;
+SimpleDHT11 dht11(D1);
+byte temperature = 30;
+byte humidity = 100;
 
 void connectToWiFi() {
 	WiFi.begin(ssid, password);
 	while (WiFi.status() != WL_CONNECTED) {
-		delay(1000);
 		Serial.println("Connecting to WiFi..");
+		delay(1000);
 	}
 	Serial.println("Connected to the WiFi network with IP address: ");
 	myCurrentIPAddr = WiFi.localIP();
@@ -80,22 +82,33 @@ void setupLEDs() {
 }
 
 void readSensors() {
-	temperature = dht11.readTemperature();
-	humidity = dht11.readHumidity();
+	auto ret = dht11.read(&temperature, &humidity, NULL);
+	if (ret != SimpleDHTErrSuccess) {
+		Serial.print("Read DHT11 failed, err=");
+		Serial.println(ret);
+	}
 	Serial.print("Temperature: ");
 	Serial.print(temperature);
 	Serial.print(" Humidity: ");
 	Serial.println(humidity);
 
-	// analogWrite(TEMPERATURE_LED, map(temperature, temperatureInterval.lower, temperatureInterval.upper, 0, 255));
-	// analogWrite(HUMIDITY_LED, map(humidity, humidityInterval.lower, humidityInterval.upper, 0, 255));
+	if (temperature > temperature_threshold) {
+		digitalWrite(TEMPERATURE_LED, HIGH);
+	} else {
+		digitalWrite(TEMPERATURE_LED, LOW);
+	}
+	if (humidity > humidity_threshold) {
+		digitalWrite(HUMIDITY_LED, HIGH);
+	} else {
+		digitalWrite(HUMIDITY_LED, LOW);
+	}
 }
 
 void setup() {
 	Serial.begin(115200);
+	connectToWiFi();
 	setupLEDs();
 	sensorTicker.attach(5, readSensors);
-	connectToWiFi();
 	broadCastTicker.attach(3, broadCastIP);
 	server.begin(serverPort, 2u);
 }
