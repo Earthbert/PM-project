@@ -13,6 +13,10 @@
 // LED configuration
 const auto TEMPERATURE_LED = D3;
 const auto HUMIDITY_LED = D2;
+// Motor configuration
+const int MOTORSPEED_PIN = D5;
+const int DIRA = D6;
+const int DIRB = D8;
 // WIFI configuration
 const uint16_t serverPort = 6969u;
 const char *ssid = "motorola-edge-40";
@@ -81,6 +85,18 @@ void setupLEDs() {
 	pinMode(HUMIDITY_LED, OUTPUT);
 }
 
+void turnOffMotor() {
+	digitalWrite(DIRA, LOW);
+	digitalWrite(DIRB, LOW);
+	digitalWrite(MOTORSPEED_PIN, LOW);
+}
+
+void turnOnMotor() {
+	digitalWrite(DIRA, HIGH);
+	digitalWrite(DIRB, LOW);
+	digitalWrite(MOTORSPEED_PIN, HIGH);
+}
+
 void readSensors() {
 	auto ret = dht11.read(&temperature, &humidity, NULL);
 	if (ret != SimpleDHTErrSuccess) {
@@ -92,16 +108,24 @@ void readSensors() {
 	Serial.print(" Humidity: ");
 	Serial.println(humidity);
 
-	if (temperature > temperature_threshold) {
+	if (temperature >= temperature_threshold) {
 		digitalWrite(TEMPERATURE_LED, HIGH);
 	} else {
 		digitalWrite(TEMPERATURE_LED, LOW);
 	}
-	if (humidity > humidity_threshold) {
+	if (humidity >= humidity_threshold) {
 		digitalWrite(HUMIDITY_LED, HIGH);
 	} else {
 		digitalWrite(HUMIDITY_LED, LOW);
 	}
+
+	turnOnMotor();
+}
+
+void setupMotor() {
+	pinMode(MOTORSPEED_PIN, OUTPUT);
+	pinMode(DIRA, OUTPUT);
+	pinMode(DIRB, OUTPUT);
 }
 
 void setup() {
@@ -111,6 +135,7 @@ void setup() {
 	sensorTicker.attach(5, readSensors);
 	broadCastTicker.attach(3, broadCastIP);
 	server.begin(serverPort, 2u);
+	setupMotor();
 }
 
 void parseIncomingPacket(const char *incomingPacket) {
