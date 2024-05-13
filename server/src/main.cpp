@@ -3,8 +3,7 @@
 #include <WiFiUdp.h>
 #include <WiFiServer.h>
 #include <Ticker.h>
-#include <Servo.h>
-#include <SimpleDHT.h>
+#include <DHT.h>
 
 // Commands
 #define GET_TEMP 'G'
@@ -42,8 +41,8 @@ enum temperatureType {
 };
 
 struct interval {
-	double lower;
-	double upper;
+	float lower;
+	float upper;
 };
 
 temperatureType currentTemperatureType = CELSIUS;
@@ -51,12 +50,11 @@ interval temperatureInterval = { 20, 40 };
 interval humidityInterval = { 0, 100 };
 
 // Temperature sensor
-// SimpleDHT11 dht11(D7);
-byte temperature = 30;
-byte humidity = 100;
+DHT dht11(D7, DHT11);
+float temperature = 30;
+float humidity = 100;
 
 void connectToWiFi() {
-	WiFi.setOutputPower(0);
 	WiFi.begin(ssid, password);
 	while (WiFi.status() != WL_CONNECTED) {
 		delay(1000);
@@ -82,23 +80,23 @@ void setupLEDs() {
 }
 
 void readSensors() {
-	// auto ret = dht11.read(&temperature, &humidity, NULL);
-	// if (ret != SimpleDHTErrSuccess) {
-	// 	Serial.print("Read DHT11 failed, err=");
-	// 	Serial.println(ret);
-	// 	return;
-	// }
+	temperature = dht11.readTemperature();
+	humidity = dht11.readHumidity();
+	Serial.print("Temperature: ");
+	Serial.print(temperature);
+	Serial.print(" Humidity: ");
+	Serial.println(humidity);
 
-	analogWrite(TEMPERATURE_LED, map(temperature, temperatureInterval.lower, temperatureInterval.upper, 0, 255));
-	analogWrite(HUMIDITY_LED, map(humidity, humidityInterval.lower, humidityInterval.upper, 0, 255));
+	// analogWrite(TEMPERATURE_LED, map(temperature, temperatureInterval.lower, temperatureInterval.upper, 0, 255));
+	// analogWrite(HUMIDITY_LED, map(humidity, humidityInterval.lower, humidityInterval.upper, 0, 255));
 }
 
 void setup() {
 	Serial.begin(115200);
 	setupLEDs();
-	sensorTicker.attach(2, readSensors);
+	sensorTicker.attach(5, readSensors);
 	connectToWiFi();
-	broadCastTicker.attach(2, broadCastIP);
+	broadCastTicker.attach(3, broadCastIP);
 	server.begin(serverPort, 2u);
 }
 
