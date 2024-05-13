@@ -5,14 +5,15 @@
 #include <Ticker.h>
 
 // Commands
-#define GET_TEMP "GET_TEMPERATURE"
+#define GET_TEMP 'G'
+#define STOP_ADVERTISE 'S'
+
 
 // LED configuration
-const auto RED_LED = D6;
-const uint16_t BLINK_INTERVAL = 500u;
+const auto TEMPERATURE_LED = D6;
+const auto HUMIDITY_LED = D2;
 // WIFI configuration
 const uint16_t serverPort = 6969u;
-const uint16_t broadcastPort = 6970u;
 const char *ssid = "motorola-edge-40";
 const char *password = "idontlikepm";
 const uint16_t broadcastInterval = 2u;
@@ -23,12 +24,35 @@ IPAddress myCurrentIPAddr;
 WiFiUDP udp;
 WiFiServer server(serverPort);
 WiFiClient client;
+bool advertise = true;
 
 // Timers
 Ticker broadCastTicker;
+Ticker sensorTicker;
 
 // Other variables
 char incomingPacket[255];
+
+// Current connfiguration
+enum temperatureType {
+	CELSIUS,
+	FAHRENHEIT,
+	KELVIN
+};
+
+struct interval {
+	double lower;
+	double upper;
+};
+
+temperatureType currentTemperatureType = CELSIUS;
+double temperature = 10;
+double humidity = 50;
+interval temperatureInterval = { 20, 40 };
+interval humidityInterval = { 0, 100 };
+
+int humidityLEDIntensity = 500;
+int temperatureLEDIntensity = 500;
 
 void connectToWiFi() {
 	WiFi.begin(ssid, password);
@@ -42,10 +66,22 @@ void connectToWiFi() {
 }
 
 void broadCastIP() {
+	if (!advertise)
+		return;
 	Serial.println("Broadcasting Alive message..");
-	udp.beginPacket(WiFi.broadcastIP(), broadcastPort);
+	udp.beginPacket(WiFi.broadcastIP(), serverPort);
 	udp.print(broadcastMessage);
 	udp.endPacket();
+}
+
+void setupLEDs() {
+	pinMode(TEMPERATURE_LED, OUTPUT);
+	pinMode(HUMIDITY_LED, OUTPUT);
+}
+
+void readSensors() {
+	analogWrite(TEMPERATURE_LED, temperatureLEDIntensity);
+	analogWrite(HUMIDITY_LED, humidityLEDIntensity);
 }
 
 void setup() {
@@ -53,12 +89,24 @@ void setup() {
 	connectToWiFi();
 	broadCastTicker.attach(broadcastInterval, broadCastIP);
 	server.begin(serverPort, 2u);
+	setupLEDs();
+	sensorTicker.attach(1, readSensors);
 }
 
 void parseIncomingPacket(const char *incomingPacket) {
-	if (strncmp(incomingPacket, GET_TEMP, strlen(GET_TEMP)) == 0) {
-		Serial.println("GET_TEMP command received");
-		client.print("25");
+	switch (incomingPacket[0]) {
+	case GET_TEMP:
+		Serial.println("Getting temperature");
+		client.print("25C");
+		break;
+	case STOP_ADVERTISE:
+		Serial.println("Stopping advertisement");
+		advertise = false;
+		client.print("Stopped advertisement");
+		break;
+	default:
+		Serial.println("Unknown command");
+		break;
 	}
 }
 
@@ -69,9 +117,14 @@ void loop() {
 	}
 
 	if (!client) {
+		if (advertise == false) {
+			advertise = true;
+			Serial.println("Starting advertisement");
+		}
 		client = server.accept();
 		if (client) {
 			Serial.println("Client connected");
+			client.print("Welcome to the server");
 		}
 	}
 
