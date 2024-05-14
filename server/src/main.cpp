@@ -58,7 +58,7 @@ struct interval {
 	int upper;
 };
 
-interval motorInterval = { 20, 40 };
+interval motorInterval = { 20, 25 };
 char currentTemperatureType = CELSIUS;
 int temperature_threshold = 20;
 int humidity_threshold = 40;
@@ -113,7 +113,7 @@ void turnOffMotor() {
 void turnOnMotor(int speed = 512) {
 	digitalWrite(DIRA, HIGH);
 	digitalWrite(DIRB, LOW);
-	digitalWrite(MOTORSPEED_PIN, HIGH);
+	analogWrite(MOTORSPEED_PIN, speed);
 }
 
 void readSensors() {
