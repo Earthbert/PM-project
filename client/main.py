@@ -50,32 +50,43 @@ class ClientShell(cmd.Cmd):
     intro = 'Welcome to the client shell! Type help or ? to list commands.\n'
     prompt = '> '
     temperatureType = 'C'
+    temp_min = -20
+    temp_max = 60
+    humidity_min = 5
+    humidity_max = 95
     
-    def convert_to_current_temperature(self, temperature):
+    def __init__(self, sock):
+        super().__init__()
+        self.sock = sock
+        self.temperatureType = str(recv_msg(self.sock))
+    
+    def conv_temp(self, temperature):
         if self.temperatureType == 'F':
             return int(temperature * 9 / 5 + 32)
         elif self.temperatureType == 'K':
             return int(temperature + 273.15)
         return temperature
-
-    def __init__(self, sock):
-        super().__init__()
-        self.sock = sock
-        temperatureType = str(recv_msg(self.sock))
+    
+    def reverse_temp(self, temperature):
+        if self.temperatureType == 'F':
+            return int((temperature - 32) * 5 / 9)
+        elif self.temperatureType == 'K':
+            return int(temperature - 273.15)
+        return temperature
 
     def do_get_temp(self, arg):
         '''
         Get the temperature from the server.
         '''
         send_msg(self.sock, GET_TEMP)
-        print('Temperature:', self.convert_to_current_temperature(int(recv_msg(self.sock))))
+        print(f'Temperature: {self.conv_temp(int(recv_msg(self.sock)))}{self.temperatureType}')
         
     def do_get_humidity(self, arg):
         '''
         Get the humidity from the server.
         '''
         send_msg(self.sock, GET_HUMIDITY)
-        print('Humidity:', recv_msg(self.sock))
+        print(f'Humidity:{recv_msg(self.sock)}')
 
     def do_stop_advertizing(self, arg):
         '''
@@ -93,54 +104,70 @@ class ClientShell(cmd.Cmd):
         send_msg(self.sock, START_ADVERTISE)
         recv_msg(self.sock)
         print("Server started advertizing.")
+        
+    def help_set_temp_threshold(self):
+        return f'''
+        Set the temperature threshold on the server.
+        Usage: set_temp_threshold <temperature({self.conv_temp(self.temp_min)}, {self.conv_temp(self.temp_max)}){self.temperatureType}>
+        '''
 
     def do_set_temp_threshold(self, arg):
-        '''
+        f'''
         Set the temperature threshold on the server.
-        Usage: set_temp_threshold <temperature(-20, 60)C>
+        Usage: set_temp_threshold <temperature({self.conv_temp(self.temp_min)}, {self.conv_temp(self.temp_max)}){self.temperatureType}>
         '''
         try:
             temp = int(arg)
-            if temp < -20 or temp > 60:
-                print('Temperature must be between -20 and 60!')
+            if not self.conv_temp(self.temp_min) <= temp <= self.conv_temp(self.temp_max):
+                print('Temperature must be in specified range! Type help for more info.')
                 return
         except ValueError:
             print('Invalid temperature!')
             return
-        send_msg(self.sock, SET_TEMP_THRESHOLD + str(temp))
-        print(recv_msg(self.sock))
+        send_msg(self.sock, SET_TEMP_THRESHOLD + str(self.reverse_temp(temp)))
+        print(f'Temperature threshold set to: {self.conv_temp(recv_msg(self.sock))}{self.temperatureType}')
+
+    def help_set_humidity_threshold(self):
+        return f'''
+        Set the temperature threshold on the server.
+        Usage: set_humidity_threshold <humidity({self.humidity_min}, {self.humidity_max})>%
+        '''
 
     def do_set_humidity_threshold(self, arg):
-        '''
-        Set the temperature threshold on the server.
-        Usage: set_humidity_threshold <humidity(5, 95)>
-        '''
         try:
             humidity = int(arg)
-            if humidity < 5 or humidity > 95:
-                print('Humidity must be between 5 and 95!')
+            if humidity < self.humidity_min or humidity > self.humidity_max:
+                print('Humidity must be in specified range! Type help for more info.')
                 return
         except ValueError:
             print('Invalid humidity!')
             return
         send_msg(self.sock, SET_HUMIDITY_THRESHOLD + str(humidity))
-        print(recv_msg(self.sock))
-        
-    def do_set_motor_interval(self, arg):
-        '''
+        print(f'Humidity threshold set to: {recv_msg(self.sock)}%')
+    
+    def help_set_motor_interval(self):
+        return f'''
         Set the motor interval on the server.
-        Usage: set_motor_interval <low(-20, 60)C> <high(-20, 60)C>
+        Usage: set_motor_interval <low({self.conv_temp(self.temp_min)}, {self.conv_temp(self.temp_max)}){self.temperatureType}> \
+        <high({self.conv_temp(self.temp_min)}, {self.conv_temp(self.temp_max)}){self.temperatureType}>
         '''
+    
+    def do_set_motor_interval(self, arg):
         try:
             low, high = map(int, arg.split())
-            if low < -20 or low > 60 or high < -20 or high > 60:
-                print('Temperature must be between -20 and 60!')
+            if low > high:
+                print('Low temperature must be less than high temperature!')
+                return
+            if ((not self.conv_temp(self.temp_min) <= low <= self.conv_temp(self.temp_max)) or
+                (not self.conv_temp(self.temp_min) <= high <= self.conv_temp(self.temp_max))):
+                print('Temperature must be in specified range! Type help for more info.')
                 return
         except ValueError:
             print('Invalid temperature!')
             return
-        send_msg(self.sock, SET_MOTOR_INTERVAL + str(low) + '_' + str(high))
-        print(recv_msg(self.sock))
+        send_msg(self.sock, SET_MOTOR_INTERVAL + str(self.reverse_temp(low)) + '_' + str(self.reverse_temp(high)))
+        server_low, server_high = map(int, recv_msg(self.sock).split('_'))
+        print(f'Motor interval set to: ({self.conv_temp(server_low)}-{self.conv_temp(server_high)}{self.temperatureType})')
 
     def do_get_config(self, arg):
         '''
@@ -158,7 +185,7 @@ class ClientShell(cmd.Cmd):
             return
         self.temperatureType = arg
         send_msg(self.sock, SET_TEMPERATURE_TYPE + arg)
-        print(recv_msg(self.sock))
+        print(f'Temperature type set to: {recv_msg(self.sock)}')
 
     def do_exit(self, arg):
         '''
@@ -166,6 +193,19 @@ class ClientShell(cmd.Cmd):
         '''
         print("Exiting...")
         return True
+    
+    def do_help(self, arg):
+        '''
+        Get help for a command. Type help <command> for more info.
+        '''
+        if arg == 'set_motor_interval':
+            print(self.help_set_motor_interval())
+        elif arg == 'set_temp_threshold':
+            print(self.help_set_temp_threshold())
+        elif arg == 'set_humidity_threshold':
+            print(self.help_set_humidity_threshold())
+        else:
+            super().do_help(arg)
 
 def search_for_server() -> socket.socket:
     print('Searching for server...')

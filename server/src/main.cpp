@@ -182,22 +182,22 @@ void parseIncomingPacket(const char *incomingPacket) {
 	case SET_TEMP_THRESHOLD:
 		Serial.println("Setting temperature threshold");
 		sscanf(incomingPacket + 1, "%d", &temperature_threshold);
-		client.printf("Temperature threshold set to %d", temperature_threshold);
+		client.print(temperature_threshold);
 		break;
 	case SET_HUMIDITY_THRESHOLD:
 		Serial.println("Setting humidity threshold");
 		sscanf(incomingPacket + 1, "%d", &humidity_threshold);
-		client.printf("Humidity threshold set to %d", humidity_threshold);
+		client.print(humidity_threshold);
 		break;
 	case SET_MOTOR_INTERVAL:
 		Serial.println("Setting motor interval");
 		sscanf(incomingPacket + 1, "%d_%d", &motorInterval.lower, &motorInterval.upper);
-		client.printf("Motor interval set to %d - %d", motorInterval.lower, motorInterval.upper);
+		client.printf("%d_%d", motorInterval.lower, motorInterval.upper);
 		break;
 	case SET_TEMP_TYPE:
 		Serial.println("Setting temperature type");
 		sscanf(incomingPacket + 1, "%c", &currentTemperatureType);
-		client.printf("Temperature type set to %c", currentTemperatureType);
+		client.printf("%c", currentTemperatureType);
 		break;
 	case GET_CONFIG:
 		Serial.println("Getting configuration");
@@ -261,6 +261,7 @@ void loop() {
 			client.stop();
 		}
 		int recvLen = client.read((uint8_t *)incomingPacket, sizeof(incomingPacket));
+		incomingPacket[recvLen] = 0;
 		if (recvLen > 0) {
 			Serial.println(incomingPacket);
 			parseIncomingPacket(incomingPacket);
