@@ -50,10 +50,10 @@ class ClientShell(cmd.Cmd):
     intro = 'Welcome to the client shell! Type help or ? to list commands.\n'
     prompt = '> '
     temperatureType = 'C'
-    temp_min = -20
-    temp_max = 60
-    humidity_min = 5
-    humidity_max = 95
+    temp_min = 0
+    temp_max = 50
+    humidity_min = 15
+    humidity_max = 85
     
     def __init__(self, sock):
         super().__init__()
