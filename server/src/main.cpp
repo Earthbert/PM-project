@@ -9,6 +9,10 @@
 #define GET_TEMP 'G'
 #define GET_HUMIDITY 'H'
 #define STOP_ADVERTISE 'S'
+#define START_ADVERTISE 'A'
+#define SET_TEMP_THRESHOLD 'T'
+#define SET_HUMIDITY_THRESHOLD 'U'
+#define SET_MOTOR_INTERVAL 'M'
 
 // LED configuration
 const auto TEMPERATURE_LED = D3;
@@ -29,6 +33,8 @@ WiFiUDP udp;
 WiFiServer server(serverPort);
 WiFiClient client;
 bool advertise = true;
+bool disconnectedPrinted = true;
+bool connectedPrinted = false;
 
 // Timers
 Ticker broadCastTicker;
@@ -50,25 +56,37 @@ struct interval {
 	byte upper;
 };
 
+interval motorInterval = { 20, 40 };
 temperatureType currentTemperatureType = CELSIUS;
 interval temperatureInterval = { 20, 40 };
-byte temperature_threshold = 30;
-byte humidity_threshold = 50;
+byte temperature_threshold = 20;
+byte humidity_threshold = 40;
 
 // Temperature sensor
 SimpleDHT11 dht11(D1);
 byte temperature = 30;
 byte humidity = 100;
 
-void connectToWiFi() {
-	WiFi.begin(ssid, password);
-	while (WiFi.status() != WL_CONNECTED) {
-		Serial.println("Connecting to WiFi..");
-		delay(1000);
+void printConnected() {
+	if (WiFi.status() != WL_CONNECTED)
+		return;
+	if (!connectedPrinted) {
+		Serial.println("Connected to the WiFi network with IP address: ");
+		myCurrentIPAddr = WiFi.localIP();
+		Serial.println(myCurrentIPAddr);
+		connectedPrinted = true;
 	}
-	Serial.println("Connected to the WiFi network with IP address: ");
-	myCurrentIPAddr = WiFi.localIP();
-	Serial.println(myCurrentIPAddr);
+	disconnectedPrinted = false;
+}
+
+void printDisconnected() {
+	if (WiFi.status() == WL_CONNECTED)
+		return;
+	if (!disconnectedPrinted) {
+		Serial.println("Disconnected from the WiFi network");
+		disconnectedPrinted = true;
+	}
+	connectedPrinted = false;
 }
 
 void broadCastIP() {
@@ -91,10 +109,10 @@ void turnOffMotor() {
 	digitalWrite(MOTORSPEED_PIN, LOW);
 }
 
-void turnOnMotor() {
+void turnOnMotor(int speed = 512) {
 	digitalWrite(DIRA, HIGH);
 	digitalWrite(DIRB, LOW);
-	digitalWrite(MOTORSPEED_PIN, HIGH);
+	analogWrite(MOTORSPEED_PIN, speed);
 }
 
 void readSensors() {
@@ -119,7 +137,7 @@ void readSensors() {
 		digitalWrite(HUMIDITY_LED, LOW);
 	}
 
-	turnOnMotor();
+	turnOnMotor(map(temperature, motorInterval.lower, motorInterval.upper, 0, 1023));
 }
 
 void setupMotor() {
@@ -130,12 +148,12 @@ void setupMotor() {
 
 void setup() {
 	Serial.begin(115200);
-	connectToWiFi();
 	setupLEDs();
+	setupMotor();
 	sensorTicker.attach(5, readSensors);
 	broadCastTicker.attach(3, broadCastIP);
+	WiFi.begin(ssid, password);
 	server.begin(serverPort, 2u);
-	setupMotor();
 }
 
 void parseIncomingPacket(const char *incomingPacket) {
@@ -160,9 +178,10 @@ void parseIncomingPacket(const char *incomingPacket) {
 }
 
 void loop() {
-	if (!WiFi.isConnected()) {
-		Serial.println("WiFi disconnected");
-		connectToWiFi();
+	if (WiFi.isConnected()) {
+		printConnected();
+	} else {
+		printDisconnected();
 	}
 
 	if (!client) {
