@@ -86,7 +86,7 @@ class ClientShell(cmd.Cmd):
         Get the humidity from the server.
         '''
         send_msg(self.sock, GET_HUMIDITY)
-        print(f'Humidity:{recv_msg(self.sock)}')
+        print(f'Humidity:{recv_msg(self.sock)}%')
 
     def do_stop_advertizing(self, arg):
         '''
@@ -167,15 +167,23 @@ class ClientShell(cmd.Cmd):
             return
         send_msg(self.sock, SET_MOTOR_INTERVAL + str(self.reverse_temp(low)) + '_' + str(self.reverse_temp(high)))
         server_low, server_high = map(int, recv_msg(self.sock).split('_'))
-        print(f'Motor interval set to: ({self.conv_temp(server_low)}-{self.conv_temp(server_high)}{self.temperatureType})')
+        print(f'Motor interval set to: ({self.conv_temp(server_low)}-{self.conv_temp(server_high)}){self.temperatureType}')
 
     def do_get_config(self, arg):
         '''
         Get the current configuration from the server.
         '''
         send_msg(self.sock, GET_CONFIG)
-        print(recv_msg(self.sock))
-        
+        msg = recv_msg(self.sock)
+        print(msg)
+        t_t, h_t, m_l, m_h, t_t_t = msg.split('_')
+        t_t = self.conv_temp(int(t_t))
+        print('Current configuration:')
+        print(f'Temperature threshold: {t_t}{self.temperatureType}')
+        print(f'Humidity threshold: {h_t}%')
+        print(f'Motor interval: ({self.conv_temp(int(m_l))}-{self.conv_temp(int(m_h))}){self.temperatureType}')
+        print(f'Temperature type: {t_t_t}')
+
     def do_set_temperature_type(self, arg):
         '''
         Set the temperature type to C, F or K.

@@ -57,10 +57,7 @@ void parseCommand(const char *incomingPacket) {
 				strcpy(temperatureType, "Kelvin");
 				break;
 		}
-		client.printf("Temperature threshold: %d\n"
-			"Humidity threshold: %d\n"
-			"Motor interval: %d - %d\n"
-			"Curren temperature type: %s\n",
+		client.printf("%d_%d_%d_%d_%s",
 			temperature_threshold, humidity_threshold,
 			motorInterval.lower, motorInterval.upper, temperatureType);
 		break;
